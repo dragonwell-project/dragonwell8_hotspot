@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -137,6 +137,9 @@ class JavaCallArguments : public StackObj {
 
   inline void push_oop(Handle h)    { _is_oop[_size] = true;
                                JNITypes::put_obj((oop)h.raw_value(), _value, _size); }
+
+  inline void push_jobject(jobject h)    { _is_oop[_size] = true;
+                               JNITypes::put_obj((oop)h, _value, _size); }
 
   inline void push_int(int i)       { _is_oop[_size] = false;
                                JNITypes::put_int(i, _value, _size); }

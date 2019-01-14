@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -78,6 +78,7 @@ public class WhiteBox {
   public native int  getHeapOopSize();
   public native int  getVMPageSize();
   public native long getVMLargePageSize();
+  public native long getHeapAlignment();
 
   public native boolean isObjectInOldGen(Object o);
   public native long getObjectSize(Object o);
@@ -160,9 +161,19 @@ public class WhiteBox {
     return enqueueMethodForCompilation(method, compLevel, -1 /*InvocationEntryBci*/);
   }
   public native boolean enqueueMethodForCompilation(Executable method, int compLevel, int entry_bci);
+  public native boolean enqueueInitializerForCompilation(Class<?> aClass, int compLevel);
   public native void    clearMethodState(Executable method);
   public native int     getMethodEntryBci(Executable method);
   public native Object[] getNMethod(Executable method, boolean isOsr);
+  public native long    allocateCodeBlob(int size, int type);
+  public        long    allocateCodeBlob(long size, int type) {
+      int intSize = (int) size;
+      if ((long) intSize != size || size < 0) {
+          throw new IllegalArgumentException(
+                "size argument has illegal value " + size);
+      }
+      return allocateCodeBlob( intSize, type);
+  }
 
   // Intered strings
   public native boolean isInStringTable(String str);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1134,7 +1134,6 @@ void VirtualSpaceList::purge(ChunkManager* chunk_manager) {
   }
 #endif
 }
-
 
 // This function looks at the mmap regions in the metaspace without locking.
 // The chunks are added with store ordering and not deleted except for at

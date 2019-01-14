@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -2033,7 +2033,7 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
     assert(task->compile_id() != CICrashAt, "just as planned");
     if (event.should_commit()) {
       event.set_method(target->get_Method());
-      event.set_compileID(compile_id);
+      event.set_compileId(compile_id);
       event.set_compileLevel(task->comp_level());
       event.set_succeded(task->is_success());
       event.set_isOsr(is_osr);

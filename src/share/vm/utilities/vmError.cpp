@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -938,6 +938,14 @@ void VMError::report_and_die() {
     // reset signal handlers or exception filter; make sure recursive crashes
     // are handled properly.
     reset_signal_handlers();
+
+    EventShutdown e;
+    if (e.should_commit()) {
+      e.set_reason("VM Error");
+      e.commit();
+    }
+
+    TRACE_VM_ERROR();
 
   } else {
     // If UseOsErrorReporting we call this for each level of the call stack

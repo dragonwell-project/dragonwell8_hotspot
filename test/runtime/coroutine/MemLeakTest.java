@@ -50,6 +50,7 @@ public class MemLeakTest {
             t.join();
         }
 
+
         int rss0 = getRssInKb();
         System.out.println(rss0);
 
@@ -78,7 +79,6 @@ public class MemLeakTest {
             Coroutine target =  new Coroutine(r);
             Coroutine.yieldTo(target); // switch to new created coroutine and let it die
         }
-
         int rss0 = getRssInKb();
         System.out.println(rss0);
 

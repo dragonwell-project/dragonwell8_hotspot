@@ -984,14 +984,14 @@ class JavaThread: public Thread {
   int _frames_to_pop_failed_realloc;
 
   // coroutine support
-  Coroutine*        _coroutine_list;
+  Coroutine*        _thread_coroutine;
   Coroutine*        _current_coroutine;
   bool              _wisp_preempted;
 
   intptr_t          _coroutine_temp;
 
  public:
-  Coroutine*& coroutine_list()                   { return _coroutine_list; }
+  Coroutine* thread_coroutine()                   { return _thread_coroutine; }
   Coroutine* current_coroutine()                 { return _current_coroutine; }
   void set_current_coroutine(Coroutine *coro)    { _current_coroutine = coro; }
   bool wisp_preempted() const                    { return _wisp_preempted; }
@@ -1454,7 +1454,7 @@ class JavaThread: public Thread {
   static ByteSize stack_guard_state_offset()     { return byte_offset_of(JavaThread, _stack_guard_state   ); }
   static ByteSize suspend_flags_offset()         { return byte_offset_of(JavaThread, _suspend_flags       ); }
   static ByteSize java_call_counter_offset()     { return byte_offset_of(JavaThread, _java_call_counter); }
-  static ByteSize coroutine_list_offset()        { return byte_offset_of(JavaThread, _coroutine_list); }
+  static ByteSize thread_coroutine_offset()        { return byte_offset_of(JavaThread, _thread_coroutine); }
 
   static ByteSize do_not_unlock_if_synchronized_offset() { return byte_offset_of(JavaThread, _do_not_unlock_if_synchronized); }
   static ByteSize should_post_on_exceptions_flag_offset() {

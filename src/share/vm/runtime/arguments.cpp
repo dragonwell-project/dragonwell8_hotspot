@@ -4146,6 +4146,12 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   }
 #endif
 
+  if (EnableCoroutine && UseParallelGC) {
+    warning("ParallelGC is not supported with Wisp"
+            "; ignoring EnableCoroutine flag." );
+    FLAG_SET_DEFAULT(EnableCoroutine, false);
+    FLAG_SET_DEFAULT(UseWispMonitor, false);
+  }
   // Set object alignment values.
   set_object_alignment();
 

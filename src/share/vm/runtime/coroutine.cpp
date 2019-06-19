@@ -73,6 +73,10 @@ void coroutine_start(Coroutine* coroutine, jobject coroutineObj) {
 }
 #endif
 
+Coroutine* Coroutine::_coroutineHead = NULL;
+Mutex* Coroutine::_coroutine_list_lock = NULL;
+bool Coroutine::_need_clean_up = false;
+
 void Coroutine::run(jobject coroutine) {
 
   // do not call JavaThread::current() here!
@@ -127,6 +131,9 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_clinit_call_counter = 0;
   coro->_wisp_post_steal_resource_area = NULL;
   coro->_is_yielding  = false;
+  coro->_has_coroutine = false;
+  // This initial value ==> never claimed.
+  coro->_oops_do_parity = 0;
   thread->set_current_coroutine(coro);
   return coro;
 }
@@ -181,15 +188,26 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   coro->_clinit_call_counter = 0;
   coro->_wisp_post_steal_resource_area = new (mtWisp) WispResourceArea(coro, 32);
   coro->_is_yielding  = false;
+  coro->_has_coroutine = false;
+  // This initial value ==> never claimed.
+  coro->_oops_do_parity = 0;
+  thread->thread_coroutine()->_has_coroutine = true;
   return coro;
 }
 
 Coroutine::~Coroutine() {
-  remove_from_list(_thread->coroutine_list());
+  assert(_state == Coroutine::_dead, "dead Coroutine");
+  assert(_wisp_thread == NULL, "cleanup");
+  assert(_wisp_post_steal_resource_area == NULL, "cleanup");
+}
+
+void Coroutine::clean_up() {
   if (_wisp_thread != NULL) {
     delete _wisp_thread;
+    _wisp_thread = NULL;
   }
   delete _wisp_post_steal_resource_area;
+  _wisp_post_steal_resource_area = NULL;
   if (!_is_thread_coroutine && _state != Coroutine::_created) {
     assert(_resource_area != NULL, "_resource_area is NULL");
     assert(_handle_area != NULL, "_handle_area is NULL");
@@ -200,6 +218,16 @@ Coroutine::~Coroutine() {
     JNIHandleBlock::release_block(active_handles(), _thread);
     //allocated from JavaCalls::call_virtual during coroutine's first running
   }
+  _thread = NULL;
+  _wisp_task = NULL;
+  _wisp_engine  = NULL;
+  _wisp_task    = NULL;
+  _coroutine = NULL;
+  _state = Coroutine::_dead;
+  _metadata_handles = NULL;
+  _resource_area = NULL;
+  _handle_area = NULL;
+  _need_clean_up = true;
 }
 
 void Coroutine::frames_do(FrameClosure* fc) {
@@ -285,6 +313,88 @@ bool Coroutine::in_critical(JavaThread* thread) {
   return true;
 }
 
+// In Wisp2, the coroutine can be stolen from other carrier.
+// For all the carriers, we mark it as true
+void Coroutine::mark_as_carrier(JavaThread* thread) {
+  thread->thread_coroutine()->_has_coroutine = true;
+}
+
+void Coroutine::coroutines_do(CoroutineClosure* cc) {
+  ALL_JAVA_COROUTINES(c) {
+    cc->do_coroutine(c);
+  }
+}
+
+static void frame_verify(frame* f, const RegisterMap *map) { f->verify(map); }
+
+
+void Coroutine::verify() {
+  if (EnableCoroutine) {
+    oops_do(&VerifyOopClosure::verify_oop, NULL, NULL);
+    frames_do(frame_verify);
+  }
+}
+
+// For global coroutine list, use the thread coroutine of main thread as header
+void Coroutine::init_global_coroutine_list(JavaThread* thread) {
+  thread->thread_coroutine()->insert_into_list(_coroutineHead);
+  _coroutine_list_lock = new Mutex(Mutex::native, "coroutine list lock", false);
+}
+
+void Coroutine::insert() {
+  MutexLockerEx ml(_coroutine_list_lock,  Mutex::_no_safepoint_check_flag);
+  insert_into_list(_coroutineHead);
+}
+
+void Coroutine::delete_exited_coroutines() {
+  assert(SafepointSynchronize::is_at_safepoint(), "should be in safepoint");
+  if (_need_clean_up == false) {
+    return;
+  }
+  _coroutine_list_lock->lock_without_safepoint_check();
+  Coroutine* node = _coroutineHead ? _coroutineHead->next() : NULL;
+  Coroutine* next_node = NULL;
+  for ( ; node != NULL && node != _coroutineHead; ) {
+    next_node = node->next();
+    if (node->_state == _dead && node->_thread == NULL) {
+      node->remove_from_list(_coroutineHead);
+      delete node;
+    }
+    node = next_node;
+  }
+  _coroutine_list_lock->unlock();
+  _need_clean_up = false;
+}
+
+Coroutine* Coroutine::next_coroutine(JavaThread* thread) {
+    Coroutine* node = NULL;
+    int loop = 0;
+    if (_is_thread_coroutine) {
+        if (!_has_coroutine) {
+            return thread->thread_coroutine();
+        }
+        node = _coroutineHead;
+    } else {
+        node = next();
+    }
+    while(node) {
+        if (node == this) {
+            return NULL;
+        } else if (node->_thread == thread) {
+            return node;
+        } else if (node == _coroutineHead) {
+            loop++;
+            if (loop > 1) {
+                return NULL;
+            }
+            node = node->next();
+        } else {
+            node = node->next();
+        }
+    }
+    return thread->thread_coroutine();
+}
+
 class oops_do_Closure: public FrameClosure {
 private:
   OopClosure* _f;
@@ -294,6 +404,25 @@ public:
   oops_do_Closure(OopClosure* f, CLDClosure* cld_f, CodeBlobClosure* cf): _f(f), _cld_f(cld_f), _cf(cf) { }
   void frames_do(frame* fr, RegisterMap* map) { fr->oops_do(_f, _cld_f, _cf, map); }
 };
+
+// GC support
+bool Coroutine::claim_oops_do_par_case(int strong_roots_parity) {
+  jint coroutine_parity = _oops_do_parity;
+  if (coroutine_parity != strong_roots_parity) {
+    jint res = Atomic::cmpxchg(strong_roots_parity, &_oops_do_parity, coroutine_parity);
+    if (res == coroutine_parity) {
+      return true;
+    } else {
+      guarantee(res == strong_roots_parity, "Or else what?");
+      assert(SharedHeap::heap()->workers()->active_workers() > 0,
+            "Should only fail when parallel.");
+        return false;
+    }
+  }
+  assert(SharedHeap::heap()->workers()->active_workers() > 0,
+        "Should only fail when parallel.");
+  return false;
+}
 
 void Coroutine::oops_do(OopClosure* f, CLDClosure* cld_f, CodeBlobClosure* cf) {
   oops_do_Closure fc(f, cld_f, cf);
@@ -1193,7 +1322,7 @@ bool WispPostStealHandleUpdateMark::check(JavaThread *current, bool sp) {
   assert(current == JavaThread::current(), "must be");
   Coroutine *coroutine = current->current_coroutine();
   if (!EnableCoroutine ||
-      coroutine == current->coroutine_list() ||
+      coroutine == current->thread_coroutine() ||
       // if we won't steal it, then no need to allocate handles.
       coroutine->enable_steal_count() != (sp ? current->java_call_counter()+1 : current->java_call_counter())) {
     _success = false;

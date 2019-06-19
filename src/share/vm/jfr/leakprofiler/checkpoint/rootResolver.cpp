@@ -389,6 +389,13 @@ bool ReferenceToThreadRootClosure::do_java_threads_oops(JavaThread* jt) {
 
   ReferenceLocateClosure rcl(_callback, OldObjectRoot::_threads, OldObjectRoot::_global_jni_handle, jt);
   jt->oops_do(&rcl, NULL, NULL);
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      if (c->thread() == jt) {
+        c->oops_do(&rcl, NULL, NULL);
+      }
+    }
+  }
   return rcl.complete();
 }
 

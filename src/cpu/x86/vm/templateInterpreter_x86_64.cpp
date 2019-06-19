@@ -1210,7 +1210,7 @@ address InterpreterGenerator::generate_native_entry(bool synchronized) {
 #endif
 
   if (EnableCoroutine) {
-    __ movptr(t, Address(r15_thread, JavaThread::coroutine_list_offset()));
+    __ movptr(t, Address(r15_thread, JavaThread::thread_coroutine_offset()));
     __ incrementl(Address(t, Coroutine::native_call_counter_offset()));
   }
 

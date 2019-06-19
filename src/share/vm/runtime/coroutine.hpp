@@ -49,7 +49,7 @@
 class Coroutine;
 class CoroutineStack;
 class WispThread;
-
+class CoroutineClosure;
 
 template<class T>
 class DoublyLinkedList {
@@ -67,7 +67,6 @@ public:
 
   void remove_from_list(pointer& list);
   void insert_into_list(pointer& list);
-  static void move(pointer& coro, pointer& target);
 
   T* last() const   { return _last; }
   T* next() const   { return _next; }
@@ -87,7 +86,7 @@ public:
     _created    = 0x00000000,      // not inited
     _onstack    = 0x00000001,
     _current    = 0x00000002,
-    _dead       = 0x00000003,      // TODO is this really needed?
+    _dead       = 0x00000003,
     _dummy      = 0xffffffff
   };
   enum Consts {
@@ -125,6 +124,8 @@ private:
   // work steal pool
   WispResourceArea*       _wisp_post_steal_resource_area;
   bool            _is_yielding;
+  bool            _has_coroutine;
+  jint            _oops_do_parity;
 
 #ifdef _LP64
   intptr_t        _storage[2];
@@ -137,6 +138,13 @@ private:
   bool is_coroutine_frame(javaVFrame* jvf);
   bool in_critical(JavaThread* thread);
   static void set_coroutine_base(intptr_t **&base, JavaThread* thread, jobject obj, Coroutine *coro, oop coroutineObj, address coroutine_start);
+
+  bool claim_oops_do_par_case(int collection_parity);
+
+  static Coroutine* _coroutineHead;
+  static Mutex* _coroutine_list_lock;
+  static bool _need_clean_up;
+
 public:
   virtual ~Coroutine();
 
@@ -146,12 +154,18 @@ public:
   static Coroutine* create_thread_coroutine(JavaThread* thread, CoroutineStack* stack);
   static Coroutine* create_coroutine(JavaThread* thread, CoroutineStack* stack, oop coroutineObj);
   static void after_safepoint(JavaThread* thread);
+  static void init_global_coroutine_list(JavaThread* thread);
+  static Coroutine* get_coroutine_head() { return _coroutineHead; }
+  static void delete_exited_coroutines();
+  static void mark_as_carrier(JavaThread* thread);
+  static void coroutines_do(CoroutineClosure* cc);
 
   CoroutineState state() const      { return _state; }
   void set_state(CoroutineState x)  { _state = x; }
 
   bool is_thread_coroutine() const  { return _is_thread_coroutine; }
   bool is_yielding() const          { return _is_yielding; }
+  bool has_coroutine() const        { return _has_coroutine; }
 
   JavaThread* thread() const        { return _thread; }
   void set_thread(JavaThread* x)    { _thread = x; }
@@ -212,11 +226,29 @@ public:
   oop print_stack_header_on(outputStream* st);
   void print_stack_on(outputStream* st);
 
+  void insert();
+
+  Coroutine* next_coroutine(JavaThread* thread);
+  void clean_up();
+  void verify();
+
   // GC support
   void oops_do(OopClosure* f, CLDClosure* cld_f, CodeBlobClosure* cf);
   void nmethods_do(CodeBlobClosure* cf);
   void metadata_do(void f(Metadata*));
   void frames_do(void f(frame*, const RegisterMap* map));
+  void frames_do_with_thread(void f(frame*, const RegisterMap* map), JavaThread* thread);
+  void gc_prologue();
+  void gc_epilogue();
+
+  bool claim_oops_do(bool is_par, int collection_parity) {
+    if (!is_par) {
+      _oops_do_parity = collection_parity;
+      return true;
+    } else {
+      return claim_oops_do_par_case(collection_parity);
+    }
+  }
 
   static ByteSize thread_offset()             { return byte_offset_of(Coroutine, _thread); }
 
@@ -322,22 +354,6 @@ template<class T> void DoublyLinkedList<T>::insert_into_list(pointer& list) {
     _last = list;
     _next->_last = (T*)this;
   }
-}
-
-template<class T> void DoublyLinkedList<T>::move(pointer &coro, pointer &target) {
-  assert(coro != NULL, "coroutine can't be null");
-  assert(target != NULL, "target can't be null");
-  assert(coro != target, "target can't be equal to current");
-
-  // remove current coro from the ring
-  coro->_last->_next = coro->_next;
-  coro->_next->_last = coro->_last;
-
-  // insert at new position
-  coro->_next = target->_next;
-  coro->_last = target;
-  coro->_next->_last = coro;
-  target->_next = coro;
 }
 
 class ObjectWaiter;
@@ -620,6 +636,14 @@ public:
 private:
   JavaThread*   _thread;
 };
+
+class CoroutineClosure: public StackObj {
+ public:
+  virtual void do_coroutine(Coroutine* coroutine) = 0;
+};
+
+// All Coroutines
+#define ALL_JAVA_COROUTINES(X) for (Coroutine* X = Coroutine::get_coroutine_head() ? Coroutine::get_coroutine_head()->next() : NULL; X && X != Coroutine::get_coroutine_head(); X = X->next())
 
 bool clear_interrupt_for_wisp(Thread *);
 

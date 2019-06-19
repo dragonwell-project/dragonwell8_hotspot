@@ -1533,7 +1533,7 @@ void JavaThread::initialize() {
   _special_runtime_exit_condition = _no_async_condition;
   _pending_async_exception = NULL;
 
-  _coroutine_list = NULL;
+  _thread_coroutine = NULL;
   _current_coroutine = NULL;
   _wisp_preempted = false;
 
@@ -1672,9 +1672,11 @@ JavaThread::JavaThread(ThreadFunction entry_point, size_t stack_sz) :
 }
 
 JavaThread::~JavaThread() {
-  while (EnableCoroutine && coroutine_list() != NULL) {
-     CoroutineStack::free_stack(coroutine_list()->stack(), this);
-     delete coroutine_list();
+  if (EnableCoroutine && _thread_coroutine != NULL) {
+     CoroutineStack::free_stack(_thread_coroutine->stack(), this);
+     if (_thread_coroutine != Coroutine::get_coroutine_head()) {
+       delete _thread_coroutine;
+     }
   }
 
   if (TraceThreadEvents) {
@@ -1975,8 +1977,7 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
                             threadObj, thread_klass,
                             vmSymbols::destroyCoroutineSupport_method_name(),
                             vmSymbols::void_method_signature(), THREAD);
-    assert(_current_coroutine == _coroutine_list, "not thread coroutine");
-    assert(_coroutine_list->next() == _coroutine_list, "ensure all coroutine has benn killed");
+    assert(_current_coroutine == _thread_coroutine, "not thread coroutine");
     CLEAR_PENDING_EXCEPTION;
   }
 
@@ -2918,15 +2919,11 @@ void JavaThread::frames_do(void f(frame*, const RegisterMap* map)) {
     f(fr, fst.register_map());
   }
   if (EnableCoroutine) {
-    // traverse the coroutine stack frames
-    Coroutine* current = _coroutine_list;
-    do {
-      current->frames_do(f);
-      current = current->next();
-    } while (current != _coroutine_list);
+    assert(_thread_coroutine != NULL, "sanity");
+    Coroutine* c = _thread_coroutine;
+    c->frames_do(f);
   }
 }
-
 
 #ifndef PRODUCT
 // Deoptimization
@@ -3019,10 +3016,17 @@ void JavaThread::gc_epilogue() {
   frames_do(frame_gc_epilogue);
 }
 
+void Coroutine::gc_epilogue() {
+  frames_do(frame_gc_epilogue);
+}
 
 static void frame_gc_prologue(frame* f, const RegisterMap* map) { f->gc_prologue(); }
 
 void JavaThread::gc_prologue() {
+  frames_do(frame_gc_prologue);
+}
+
+void Coroutine::gc_prologue() {
   frames_do(frame_gc_prologue);
 }
 
@@ -3087,14 +3091,10 @@ void JavaThread::oops_do(OopClosure* f, CLDClosure* cld_f, CodeBlobClosure* cf) 
       fst.current()->oops_do(f, cld_f, cf, fst.register_map());
     }
   }
-
-
   if (EnableCoroutine) {
-    Coroutine* current = _coroutine_list;
-    do {
-      current->oops_do(f, cld_f, cf);
-      current = current->next();
-    } while (current != _coroutine_list);
+    assert(_thread_coroutine != NULL, "sanity");
+    Coroutine* c = _thread_coroutine;
+    c->oops_do(f, cld_f, cf);
   }
 
   // callee_target is never live across a gc point so NULL it here should
@@ -3140,11 +3140,9 @@ void JavaThread::nmethods_do(CodeBlobClosure* cf) {
   }
 
   if (EnableCoroutine) {
-    Coroutine* current = _coroutine_list;
-    do {
-      current->nmethods_do(cf);
-      current = current->next();
-    } while (current != _coroutine_list);
+    assert(_thread_coroutine != NULL, "sanity");
+    Coroutine* c = _thread_coroutine;
+    c->nmethods_do(cf);
   }
 }
 
@@ -3164,11 +3162,9 @@ void JavaThread::metadata_do(void f(Metadata*)) {
   }
 
   if (EnableCoroutine) {
-    Coroutine* current = _coroutine_list;
-    do {
-      current->metadata_do(f);
-      current = current->next();
-    } while (current != _coroutine_list);
+    assert(_thread_coroutine != NULL, "sanity");
+    Coroutine* c = _thread_coroutine;
+    c->metadata_do(f);
   }
 }
 
@@ -3960,6 +3956,7 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   Metaspace::post_initialize();
 
   if (EnableCoroutine) {
+    Coroutine::init_global_coroutine_list((JavaThread*) THREAD);
     call_startWispDaemons(THREAD);
     if (HAS_PENDING_EXCEPTION) {
       vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
@@ -4590,6 +4587,11 @@ void Threads::oops_do(OopClosure* f, CLDClosure* cld_f, CodeBlobClosure* cf) {
   ALL_JAVA_THREADS(p) {
     p->oops_do(f, cld_f, cf);
   }
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      c->oops_do(f, cld_f, cf);
+    }
+  }
   VMThread::vm_thread()->oops_do(f, cld_f, cf);
 }
 
@@ -4613,6 +4615,14 @@ void Threads::possibly_parallel_oops_do(OopClosure* f, CLDClosure* cld_f, CodeBl
       p->oops_do(f, cld_f, cf);
     }
   }
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      if (c->claim_oops_do(is_par, cp)) {
+        c->oops_do(f, cld_f, cf);
+      }
+    }
+  }
+
   VMThread* vmt = VMThread::vm_thread();
   if (vmt->claim_oops_do(is_par, cp)) {
     vmt->oops_do(f, cld_f, cf);
@@ -4641,6 +4651,11 @@ void Threads::nmethods_do(CodeBlobClosure* cf) {
   ALL_JAVA_THREADS(p) {
     p->nmethods_do(cf);
   }
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      c->nmethods_do(cf);
+    }
+  }
   VMThread::vm_thread()->nmethods_do(cf);
 }
 
@@ -4648,17 +4663,32 @@ void Threads::metadata_do(void f(Metadata*)) {
   ALL_JAVA_THREADS(p) {
     p->metadata_do(f);
   }
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      c->metadata_do(f);
+    }
+  }
 }
 
 void Threads::gc_epilogue() {
   ALL_JAVA_THREADS(p) {
     p->gc_epilogue();
   }
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      c->gc_epilogue();
+    }
+  }
 }
 
 void Threads::gc_prologue() {
   ALL_JAVA_THREADS(p) {
     p->gc_prologue();
+  }
+  if (EnableCoroutine) {
+    ALL_JAVA_COROUTINES(c) {
+      c->gc_prologue();
+    }
   }
 }
 
@@ -4704,20 +4734,24 @@ JavaThread *Threads::owning_thread_from_monitor_owner(address owner, bool doLock
 
   {
     MutexLockerEx ml(doLock ? Threads_lock : NULL);
-    ALL_JAVA_THREADS(p) {
-      // first, see if owner is the address of a Java thread
-      if (UseWispMonitor) {
-        if (p->coroutine_list()) {
-          Coroutine* c = p->coroutine_list();
-          do {
-            if ((address) c->wisp_thread() == owner) {
-              return c->wisp_thread();
-            }
-            c = c->next();
-          } while (c != p->coroutine_list());
+    if (UseWispMonitor) {
+      ALL_JAVA_THREADS(p) {
+        Coroutine* c = p->thread_coroutine();
+        if ((address) c->wisp_thread() == owner) {
+          return c->wisp_thread();
         }
-      } else if (owner == (address)p) {
-        return p;
+      }
+      ALL_JAVA_COROUTINES(c) {
+        if ((address) c->wisp_thread() == owner) {
+          return c->wisp_thread();
+        }
+      }
+    } else {
+      ALL_JAVA_THREADS(p) {
+        // first, see if owner is the address of a Java thread
+        if (owner == (address)p) {
+          return p;
+        }
       }
     }
   }
@@ -4734,21 +4768,28 @@ JavaThread *Threads::owning_thread_from_monitor_owner(address owner, bool doLock
   JavaThread* the_owner = NULL;
   {
     MutexLockerEx ml(doLock ? Threads_lock : NULL);
-    ALL_JAVA_THREADS(q) {
-      if (UseWispMonitor) {
-        if (q->coroutine_list()) {
-          Coroutine* c = q->coroutine_list();
-          do {
-            if (c->wisp_thread()->is_lock_owned(owner)) {
-              the_owner = c->wisp_thread();
-              break;
-            }
-            c = c->next();
-          } while (c != q->coroutine_list());
+    if (UseWispMonitor) {
+      ALL_JAVA_THREADS(p) {
+        Coroutine* c = p->thread_coroutine();
+        if (c->wisp_thread()->is_lock_owned(owner)) {
+          the_owner = c->wisp_thread();
+          break;
         }
-      } else if (q->is_lock_owned(owner)) {
-        the_owner = q;
-        break;
+      }
+      if (the_owner == NULL) {
+        ALL_JAVA_COROUTINES(c) {
+          if (c->wisp_thread()->is_lock_owned(owner)) {
+            the_owner = c->wisp_thread();
+            break;
+          }
+        }
+      }
+    } else {
+      ALL_JAVA_THREADS(q) {
+        if (q->is_lock_owned(owner)) {
+          the_owner = q;
+          break;
+        }
       }
     }
   }
@@ -4785,16 +4826,19 @@ void Threads::print_on(outputStream* st, bool print_stacks, bool internal_format
       } else {
         p->print_stack_on(st);
         if (EnableCoroutine) {
-          assert(p->coroutine_list() != NULL, "coroutine list");
           if (!p->is_Compiler_thread() && (PrintThreadCoroutineInfo || !p->current_coroutine()->is_thread_coroutine())) {
             p->current_coroutine()->print_stack_header_on(st);
             st->print("\n");
           }
-          Coroutine* c = p->coroutine_list();
-          do {
-            c->print_stack_on(st);
-            c = c->next();
-          } while (c != p->coroutine_list());
+          Coroutine* c = p->thread_coroutine();
+          c->print_stack_on(st);
+          if (c->has_coroutine()) {
+            ALL_JAVA_COROUTINES(c) {
+              if (c->thread() == p) {
+                c->print_stack_on(st);
+              }
+            }
+          }
         }
       }
     }
@@ -5142,8 +5186,11 @@ void Threads::verify() {
   }
   VMThread* thread = VMThread::vm_thread();
   if (thread != NULL) thread->verify();
+  ALL_JAVA_COROUTINES(c) {
+    c->verify();
+  }
 }
 
 void JavaThread::initialize_coroutine_support() {
-  Coroutine::create_thread_coroutine(this, CoroutineStack::create_thread_stack(this))->insert_into_list(_coroutine_list);
+  _thread_coroutine = Coroutine::create_thread_coroutine(this, CoroutineStack::create_thread_stack(this));
 }

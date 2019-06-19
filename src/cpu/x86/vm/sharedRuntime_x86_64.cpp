@@ -2364,7 +2364,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   }
 
   if (EnableCoroutine) {
-    __ movptr(r11, Address(r15_thread, JavaThread::coroutine_list_offset()));
+    __ movptr(r11, Address(r15_thread, JavaThread::thread_coroutine_offset()));
     __ incrementl(Address(r11, Coroutine::native_call_counter_offset()));
   }
 

@@ -349,6 +349,8 @@
   template(initializeSystemClass_name,                "initializeSystemClass")                    \
   template(initializeWispClass_name,                  "initializeWispClass")                      \
   template(startWispDaemons_name,                     "startWispDaemons")                         \
+  template(initializeAsyncIOClass_name,               "initializeAsyncIOClass")                   \
+  template(startAsyncIODaemon_name,                   "startAsyncIODaemon")                       \
   template(loadClass_name,                            "loadClass")                                \
   template(loadClassInternal_name,                    "loadClassInternal")                        \
   template(get_name,                                  "get")                                      \
@@ -646,6 +648,7 @@
   template(com_alibaba_wisp_engine_WispEngine,         "com/alibaba/wisp/engine/WispEngine")                      \
   template(com_alibaba_wisp_engine_WispCarrier,        "com/alibaba/wisp/engine/WispCarrier")                     \
   template(com_alibaba_wisp_engine_WispEventPump,      "com/alibaba/wisp/engine/WispEventPump")                   \
+  template(com_alibaba_wisp_engine_WispAsyncIO,        "com/alibaba/wisp/engine/WispAsyncIO")                     \
   template(isInCritical_name,                          "isInCritical")                                            \
   template(jdkParkStatus_name,                         "jdkParkStatus")                                           \
   template(jvmParkStatus_name,                         "jvmParkStatus")                                           \

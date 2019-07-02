@@ -131,6 +131,10 @@
   diagnostic(bool, VerboseWisp, false,                                      \
           "Print verbose Wisp information")                                 \
                                                                             \
+  product(bool, UseAsyncIO, false,                                          \
+          "Enable thread-based asynchronous IO")                            \
+                                                                            \
+                                                                            \
   manageable(bool, PrintThreadCoroutineInfo, false,                         \
           "print the park/unpark information for thread coroutine")         \
                                                                             \

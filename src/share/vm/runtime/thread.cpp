@@ -1113,6 +1113,24 @@ static void call_startWispDaemons(TRAPS) {
                                          vmSymbols::void_method_signature(), CHECK);
 }
 
+static void call_initializeAsyncIOClass(TRAPS) {
+  Klass* k =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_wisp_engine_WispAsyncIO(), true, CHECK);
+  instanceKlassHandle klass (THREAD, k);
+
+  JavaValue result(T_VOID);
+  JavaCalls::call_static(&result, klass, vmSymbols::initializeAsyncIOClass_name(),
+                                         vmSymbols::void_method_signature(), CHECK);
+}
+
+static void call_startAsyncIODaemon(TRAPS) {
+  Klass* k =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_wisp_engine_WispAsyncIO(), true, CHECK);
+  instanceKlassHandle klass (THREAD, k);
+
+  JavaValue result(T_VOID);
+  JavaCalls::call_static(&result, klass, vmSymbols::startAsyncIODaemon_name(),
+                                         vmSymbols::void_method_signature(), CHECK);
+}
+
 char java_runtime_name[128] = "";
 char java_runtime_version[128] = "";
 char java_distro_name[128] = "";
@@ -3889,6 +3907,8 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
       initialize_class(vmSymbols::java_dyn_CoroutineSupport(), CHECK_0);
       Coroutine::initialize_coroutine_support((JavaThread*) THREAD);
       call_initializeWispClass(CHECK_0);
+    } else if (UseAsyncIO) {
+      call_initializeAsyncIOClass(CHECK_0);
     }
 
     // get the Java runtime name after java.lang.System is initialized
@@ -3961,6 +3981,11 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   if (EnableCoroutine) {
     call_startWispDaemons(THREAD);
+    if (HAS_PENDING_EXCEPTION) {
+      vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
+    }
+  } else if (UseAsyncIO) {
+    call_startAsyncIODaemon(THREAD);
     if (HAS_PENDING_EXCEPTION) {
       vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
     }

@@ -416,6 +416,12 @@ JVM_ENTRY(jobject, JVM_InitProperties(JNIEnv *env, jobject properties))
     }
   }
 
+  {
+    if (UseAsyncIO && EnableCoroutine) {
+      PUTPROP(props, "com.alibaba.wisp.enableAsyncIO", "true");
+    }
+  }
+
   // JVM monitoring and management support
   // Add the sun.management.compiler property for the compiler's name
   {

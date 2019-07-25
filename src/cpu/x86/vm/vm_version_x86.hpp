@@ -410,13 +410,13 @@ protected:
       result |= CPU_CX8;
     if (_cpuid_info.std_cpuid1_edx.bits.cmov != 0)
       result |= CPU_CMOV;
-    if (_cpuid_info.std_cpuid1_edx.bits.fxsr != 0 || (is_amd() &&
+    if (_cpuid_info.std_cpuid1_edx.bits.fxsr != 0 || (is_amd_family() &&
         _cpuid_info.ext_cpuid1_edx.bits.fxsr != 0))
       result |= CPU_FXSR;
     // HT flag is set for multi-core processors also.
     if (threads_per_core() > 1)
       result |= CPU_HT;
-    if (_cpuid_info.std_cpuid1_edx.bits.mmx != 0 || (is_amd() &&
+    if (_cpuid_info.std_cpuid1_edx.bits.mmx != 0 || (is_amd_family() &&
         _cpuid_info.ext_cpuid1_edx.bits.mmx != 0))
       result |= CPU_MMX;
     if (_cpuid_info.std_cpuid1_edx.bits.sse != 0)
@@ -456,8 +456,8 @@ protected:
     if (_cpuid_info.sef_cpuid7_ebx.bits.rtm != 0)
       result |= CPU_RTM;
 
-    // AMD features.
-    if (is_amd()) {
+    // AMD||Hygon features.
+    if (is_amd_family()) {
       if ((_cpuid_info.ext_cpuid1_edx.bits.tdnow != 0) ||
           (_cpuid_info.ext_cpuid1_ecx.bits.prefetchw != 0))
         result |= CPU_3DNOW_PREFETCH;
@@ -558,6 +558,8 @@ public:
   static int  cpu_family()        { return _cpu;}
   static bool is_P6()             { return cpu_family() >= 6; }
   static bool is_amd()            { assert_is_initialized(); return _cpuid_info.std_vendor_name_0 == 0x68747541; } // 'htuA'
+  static bool is_hygon()          { assert_is_initialized(); return _cpuid_info.std_vendor_name_0 == 0x6F677948; } // 'ogyH'
+  static bool is_amd_family()     {return is_amd() || is_hygon();}
   static bool is_intel()          { assert_is_initialized(); return _cpuid_info.std_vendor_name_0 == 0x756e6547; } // 'uneG'
 
   static bool supports_processor_topology() {
@@ -578,7 +580,7 @@ public:
       if (!supports_topology || result == 0) {
         result = (_cpuid_info.dcp_cpuid4_eax.bits.cores_per_cpu + 1);
       }
-    } else if (is_amd()) {
+    } else if (is_amd_family()) {
       result = (_cpuid_info.ext_cpuid8_ecx.bits.cores_per_cpu + 1);
     }
     return result;
@@ -599,7 +601,7 @@ public:
     intx result = 0;
     if (is_intel()) {
       result = (_cpuid_info.dcp_cpuid4_ebx.bits.L1_line_size + 1);
-    } else if (is_amd()) {
+    } else if (is_amd_family()) {
       result = _cpuid_info.ext_cpuid5_ecx.bits.L1_line_size;
     }
     if (result < 32) // not defined ?
@@ -661,7 +663,7 @@ public:
 
   // AMD features
   static bool supports_3dnow_prefetch()    { return (_cpuFeatures & CPU_3DNOW_PREFETCH) != 0; }
-  static bool supports_mmx_ext()  { return is_amd() && _cpuid_info.ext_cpuid1_edx.bits.mmx_amd != 0; }
+  static bool supports_mmx_ext()  { return is_amd_family() && _cpuid_info.ext_cpuid1_edx.bits.mmx_amd != 0; }
   static bool supports_lzcnt()    { return (_cpuFeatures & CPU_LZCNT) != 0; }
   static bool supports_sse4a()    { return (_cpuFeatures & CPU_SSE4A) != 0; }
 
@@ -674,7 +676,7 @@ public:
   }
   static bool supports_tscinv() {
     return supports_tscinv_bit() &&
-           ( (is_amd() && !is_amd_Barcelona()) ||
+           ( (is_amd_family() && !is_amd_Barcelona()) ||
              is_intel_tsc_synched_at_init() );
   }
 
@@ -706,7 +708,7 @@ public:
 
     intx count = AllocatePrefetchDistance;
     if (count < 0) {   // default ?
-      if (is_amd()) {  // AMD
+      if (is_amd_family()) {  // AMD||Hygon
         if (supports_sse2())
           count = 256; // Opteron
         else

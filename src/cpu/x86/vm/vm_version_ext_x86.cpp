@@ -336,7 +336,7 @@ bool VM_Version_Ext::supports_tscinv_ext(void) {
     return true;
   }
 
-  if (is_amd()) {
+  if (is_amd_family()) {
     return !is_amd_Barcelona();
   }
 
@@ -401,6 +401,9 @@ const char* VM_Version_Ext::cpu_family_description(void) {
   if (is_amd()) {
     return _family_id_amd[cpu_family_id];
   }
+  if(is_hygon()) {
+    return "Dhyana";
+  }
   if (is_intel()) {
     if (cpu_family_id == CPU_FAMILY_PENTIUMPRO) {
       return cpu_model_description();
@@ -422,6 +425,9 @@ int VM_Version_Ext::cpu_type_description(char* const buf, size_t buf_len) {
     x64 = cpu_is_em64t() ? " Intel64" : "";
   } else if (is_amd()) {
     cpu_type = "AMD";
+    x64 = cpu_is_em64t() ? " AMD64" : "";
+  } else if (is_hygon()) {
+    cpu_type = "Hygon";
     x64 = cpu_is_em64t() ? " AMD64" : "";
   } else {
     cpu_type = "Unknown x86";

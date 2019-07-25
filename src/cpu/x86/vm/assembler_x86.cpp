@@ -2131,9 +2131,9 @@ void Assembler::nop(int i) {
     }
     return;
   }
-  if (UseAddressNop && VM_Version::is_amd()) {
+  if (UseAddressNop && VM_Version::is_amd_family()) {
     //
-    // Using multi-bytes nops "0x0F 0x1F [address]" for AMD.
+    // Using multi-bytes nops "0x0F 0x1F [address]" for AMD||Hygon.
     //  1: 0x90
     //  2: 0x66 0x90
     //  3: 0x66 0x66 0x90 (don't use "0x0F 0x1F 0x00" - need patching safe padding)

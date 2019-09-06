@@ -760,7 +760,7 @@ void VM_Version::get_processor_features() {
   // UseXmmRegToRegMoveAll == true  --> movaps(xmm, xmm), movapd(xmm, xmm).
   // UseXmmRegToRegMoveAll == false --> movss(xmm, xmm),  movsd(xmm, xmm).
 
-  if( is_amd() ) { // AMD cpus specific settings
+  if( is_amd_family() ) { // AMD||Hygon cpus specific settings
     if( supports_sse2() && FLAG_IS_DEFAULT(UseAddressNop) ) {
       // Use it on new AMD cpus starting from Opteron.
       UseAddressNop = true;

@@ -1346,33 +1346,68 @@ void PreloadClassChain::deoptimize_methods() {
 
 void PreloadClassChain::do_unloading(BoolObjectClosure* is_alive) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be in safepoint");
+  bool is_unloading_methods;
   if (deopt_has_done()) {
     return;
   }
   for (int i = 0; i < length(); i++) {
     PreloadClassChainEntry* entry = this->at(i);
     GrowableArray<InstanceKlass*>* array = entry->resolved_klasses();
-    for (int i = 0; i < array->length(); i++) {
-      InstanceKlass* k = array->at(i);
+    is_unloading_methods = false;
+    for (int ikIndex = 0; ikIndex < array->length(); ikIndex++) {
+      InstanceKlass* k = array->at(ikIndex);
       if (k == NULL) {
+        continue;
+      }
+      if (k->has_been_redefined()) {
+        ResourceMark rm;
+        tty->print_cr("[JitWarmUp] INFO: The class %s was redefined, entry index(%d)", k->external_name(), i);
+        // reset InstanceKlass pointer
+        array->at_put(ikIndex, NULL);
+        is_unloading_methods = true;
         continue;
       }
       // reset InstanceKlass pointer
       ClassLoaderData* data = k->class_loader_data();
       if (!data->is_alive(is_alive)) {
-        array->remove_at(i);
+        array->at_put(ikIndex, NULL);
+        is_unloading_methods = true;
       }
     }
-    for (PreloadMethodHolder* holder = entry->method_holder(); holder != NULL;
-         holder = holder->next()) {
-      if (holder->deopted()) {
-        continue;
-      }
-      if (!holder->is_alive(is_alive)) {
+
+    if (is_unloading_methods) {
+      for (PreloadMethodHolder* holder = entry->method_holder(); holder != NULL;
+        holder = holder->next()) {
+        ResourceMark rm;
+        if (holder->deopted()) {
+          continue;
+        }
         // reset Method pointer to NULL
+        if (PrintCompilationWarmUpDetail) {
+          tty->print_cr("[JitWarmUp] INFO: class was redefined or unloaded. Unloading the method <%s: %s>, entry index(%d)", holder->name()->as_C_string(), holder->signature()->as_C_string(), i);
+        }
         holder->set_resolved_method(NULL);
-      }
-    } // end of method holder loop
+      } // end of method holder loop
+    } else {
+      for (PreloadMethodHolder* holder = entry->method_holder(); holder != NULL;
+        holder = holder->next()) {
+        if (holder->deopted()) {
+          continue;
+        }
+        if (holder->resolved_method() == NULL) {
+          continue;
+        }
+        if (!holder->is_alive(is_alive)) {
+          // reset Method pointer to NULL
+          ResourceMark rm;
+          if (PrintCompilationWarmUpDetail) {
+            tty->print_cr("[JitWarmUp] INFO: Unloading the method <%s: %s>", holder->name()->as_C_string(),
+                          holder->signature()->as_C_string());
+          }
+          holder->set_resolved_method(NULL);
+        }
+      } // end of method holder loop
+    }
   } // end of entry loop
 }
 
@@ -1777,10 +1812,10 @@ PreloadMethodHolder* JitWarmUpLogParser::next() {
   mh->set_size(method_size);
 
   // add class init chain relation
-  /*
-  int method_chain_offset = static_cast<int>(first_invoke_init_order) >= class_chain_offset ? first_invoke_init_order
-                            : _holder->chain()->length() -1;
-                            */
+  // Mount the method to its corresponding declaring class entry in the ClassInitChain
+  if (PrintCompilationWarmUpDetail) {
+    tty->print_cr("[JitWarmUp] INFO: Mount the method <%s: %s> to the class %s", method_name_char, method_sig_char, class_name_char);
+  }
   int method_chain_offset = class_chain_offset;
   mh->set_mounted_offset(method_chain_offset);
   this->info_holder()->chain()->mount_method_at(mh, method_chain_offset);

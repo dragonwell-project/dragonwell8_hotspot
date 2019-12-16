@@ -911,7 +911,7 @@ int SystemProcessInterface::SystemProcesses::ProcessIterator::next_process() {
   }
 
   do {
-      entry = os::readdir(_dir, _entry);
+      entry = os::readdir(_dir);
     if (entry == NULL) {
       // error
       _valid = false;

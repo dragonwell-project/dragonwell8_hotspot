@@ -147,7 +147,11 @@ CFLAGS += -DALLOW_OPERATOR_NEW_USAGE
 LIBJVM_DEBUGINFO   = lib$(JVM).debuginfo
 LIBJVM_DIZ         = lib$(JVM).diz
 
+<<<<<<< HEAD
 ifeq ($(ENABLE_JFR),false)
+=======
+ifneq ($(ENABLE_JFR),true)
+>>>>>>> jdk8u272-ga
 EXCLUDE_JFR_PATHS:= -o -name jfr -prune
 endif
 

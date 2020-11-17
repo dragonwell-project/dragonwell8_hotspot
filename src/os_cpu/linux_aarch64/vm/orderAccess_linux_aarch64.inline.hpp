@@ -77,6 +77,9 @@ inline void*    OrderAccess::load_ptr_acquire(volatile void*       p)
 inline void*    OrderAccess::load_ptr_acquire(const volatile void* p)
 { void* data; __atomic_load((void* const volatile *)p, &data, __ATOMIC_ACQUIRE); return data; }
 
+inline bool OrderAccess::load_acquire(volatile bool* p)
+{ bool data; __atomic_load(p, &data, __ATOMIC_ACQUIRE); return data; }
+
 inline void     OrderAccess::release_store(volatile jbyte*   p, jbyte   v)
 { __atomic_store(p, &v, __ATOMIC_RELEASE); }
 inline void     OrderAccess::release_store(volatile jshort*  p, jshort  v)
@@ -101,6 +104,8 @@ inline void     OrderAccess::release_store_ptr(volatile intptr_t* p, intptr_t v)
 { __atomic_store(p, &v, __ATOMIC_RELEASE); }
 inline void     OrderAccess::release_store_ptr(volatile void*     p, void*    v)
 { __atomic_store((void* volatile *)p, &v, __ATOMIC_RELEASE); }
+inline void     OrderAccess::release_store(volatile bool* p, bool v)
+{ __atomic_store(p, &v, __ATOMIC_RELEASE); }
 
 inline void     OrderAccess::store_fence(jbyte*   p, jbyte   v)
 { __atomic_store(p, &v, __ATOMIC_RELAXED); fence(); }

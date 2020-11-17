@@ -47,7 +47,6 @@ inline void Atomic::store    (jint     store_value, volatile jint*     dest) { *
 inline void Atomic::store_ptr(intptr_t store_value, volatile intptr_t* dest) { *dest = store_value; }
 inline void Atomic::store_ptr(void*    store_value, volatile void*     dest) { *(void* volatile *)dest = store_value; }
 
-
 inline jint Atomic::add(jint add_value, volatile jint* dest)
 {
  return __sync_add_and_fetch(dest, add_value);

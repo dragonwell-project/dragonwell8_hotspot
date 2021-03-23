@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
-
 import com.oracle.java.testlibrary.*;
 import static com.oracle.java.testlibrary.Asserts.*;
 
@@ -31,6 +30,7 @@ public class WispThreadMXBeanTest {
 
     public static void main(String[] args) throws Exception {
         getStack();
+        getThreadInfo();
     }
 
     private static void getStack() throws Exception {
@@ -50,5 +50,27 @@ public class WispThreadMXBeanTest {
         System.out.println(i);
 
        done = true;
+    }
+
+    private static void getThreadInfo() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        Thread thread = new Thread(() -> {
+            latch.countDown();
+            while (true) {
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                }
+            }
+        });
+        thread.start();
+
+        latch.await();
+        ThreadInfo[] infos = mbean.getThreadInfo(new long[]{thread.getId()}, 0);
+        StackTraceElement[] stack1 = thread.getStackTrace();
+        if (infos.length > 0) {
+            StackTraceElement[] stack2 = infos[0].getStackTrace();
+            assertTrue(Arrays.equals(stack1, stack2));
+        }
     }
 }

@@ -1003,7 +1003,7 @@ ThreadsListEnumerator::ThreadsListEnumerator(Thread* cur_thread,
       _threads_array->append(h);
     }
 
-    if (EnableCoroutine) {
+    if (EnableCoroutine && SafepointSynchronize::is_at_safepoint()) {
       for (Coroutine* co = jt->coroutine_list()->next(); co != jt->coroutine_list(); co = co->next()) {
         if (!ThreadsListEnumerator::skipThread(co->thread(), include_jvmti_agent_threads, include_jni_attaching_threads)) {
           oop tw = com_alibaba_wisp_engine_WispTask::get_threadWrapper(co->wisp_task());

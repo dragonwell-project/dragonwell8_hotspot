@@ -324,7 +324,7 @@ void VM_ThreadDump::doit() {
       ThreadSnapshot* ts = snapshot_thread(jt, tcl);
       _result->add_thread_snapshot(ts);
 
-      if (EnableCoroutine) {
+      if (EnableCoroutine && SafepointSynchronize::is_at_safepoint()) {
         for (Coroutine* co = jt->coroutine_list()->next();
             co != jt->coroutine_list(); co = co->next()) {
           oop tw = com_alibaba_wisp_engine_WispTask::get_threadWrapper(co->wisp_task());
@@ -355,7 +355,7 @@ void VM_ThreadDump::doit() {
         continue;
       }
 
-      if (EnableCoroutine) {
+      if (EnableCoroutine && SafepointSynchronize::is_at_safepoint()) {
         jlong id = java_lang_Thread::thread_id(th());
         // this would traverse thread's coroutine list
         JavaThread* jt = Threads::find_java_thread_from_java_tid(id);

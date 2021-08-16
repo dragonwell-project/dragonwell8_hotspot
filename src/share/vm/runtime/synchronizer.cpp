@@ -255,7 +255,7 @@ void ObjectSynchronizer::fast_exit(Handle object, BasicLock* lock, TRAPS) {
      }
   }
 
-  ObjectSynchronizer::inflate(THREAD, object())->exit (true, THREAD) ;
+  ObjectSynchronizer::inflate(THREAD, object(), inflate_cause_vm_internal)->exit (true, THREAD) ;
 }
 // -----------------------------------------------------------------------------
 // Interpreter/Compiler Slow Case

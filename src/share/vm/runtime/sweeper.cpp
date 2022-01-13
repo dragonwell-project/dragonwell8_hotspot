@@ -676,7 +676,7 @@ void NMethodSweeper::print() {
   tty->print_cr("  Total size of flushed methods:   " SIZE_FORMAT "kB", _total_flushed_size/K);
 }
 
-// support trigger code cache sweeper periodly
+//Support trigger code cache sweeper periodly
 class SweepTask : public PeriodicTask {
 public:
     SweepTask() : PeriodicTask(CodeSweeperTriggerTime * 1000) {}

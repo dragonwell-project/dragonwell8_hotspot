@@ -53,6 +53,7 @@ class JfrThreadLocal {
   bool _excluded;
   bool _dead;
   traceid _parent_trace_id;
+<<<<<<< HEAD
   jlong _alloc_count;
   jlong _alloc_count_until_sample;
   // This field is used to help to distinguish the object allocation request source.
@@ -62,6 +63,8 @@ class JfrThreadLocal {
   // We save this infomation in _event_id, which later can be retrieved in
   // CollecetedHeap::obj_allocate to identify the real allocation request source.
   JfrEventId _cached_event_id;
+=======
+>>>>>>> upstream/master
 
   JfrBuffer* install_native_buffer() const;
   JfrBuffer* install_java_buffer() const;

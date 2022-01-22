@@ -55,19 +55,13 @@ JfrThreadLocal::JfrThreadLocal() :
   _stack_trace_hash(0),
   _stackdepth(0),
   _entering_suspend_flag(0),
-<<<<<<< HEAD
   _excluded(false),
   _dead(false),
   _alloc_count(0),
   _alloc_count_until_sample(1),
   _cached_event_id(MaxJfrEventId) {
 
-  Thread* thread = ThreadLocalStorage::thread();
-=======
-  _dead(false) {
-
   Thread* thread = Thread::current_or_null();
->>>>>>> upstream/master
   _parent_trace_id = thread != NULL ? thread->jfr_thread_local()->trace_id() : (traceid)0;
 }
 

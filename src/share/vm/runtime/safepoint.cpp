@@ -692,6 +692,10 @@ void SafepointSynchronize::do_cleanup_tasks() {
     TraceTime t7("purging class loader data graph", TraceSafepointCleanupTime);
     ClassLoaderDataGraph::purge_if_needed();
   }
+
+  if (EnableCoroutine) {
+    Coroutine::delete_exited_coroutines();
+  }
 }
 
 

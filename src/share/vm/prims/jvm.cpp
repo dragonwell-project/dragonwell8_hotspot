@@ -3579,7 +3579,7 @@ JVM_QUICK_ENTRY(jboolean, JVM_IsInSameNative(JNIEnv* env, jobject jthread))
   // the thread is in native status and the native call counter isn't changed during two calls
   // then return true
   if (thr != NULL && thr->thread_state() == _thread_in_native) {
-    Coroutine* coro = thr->coroutine_list();
+    Coroutine* coro = thr->thread_coroutine();
     assert(coro != NULL, "coroutine list");
     if (coro->last_native_call_counter() == coro->native_call_counter()) {
       return JNI_TRUE;

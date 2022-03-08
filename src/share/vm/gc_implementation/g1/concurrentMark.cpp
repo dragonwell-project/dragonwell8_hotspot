@@ -2672,7 +2672,7 @@ public:
   }
 };
 
-class G1RemarkThreadsClosure : public ThreadClosure {
+class G1RemarkThreadsClosure : public ThreadClosure, public CoroutineClosure {
   CMSATBBufferClosure _cm_satb_cl;
   G1CMOopClosure _cm_cl;
   MarkingCodeBlobClosure _code_cl;
@@ -2707,6 +2707,12 @@ class G1RemarkThreadsClosure : public ThreadClosure {
       }
     }
   }
+
+  void do_coroutine(Coroutine* coroutine) {
+    if(coroutine->claim_oops_do(_is_par, _thread_parity)) {
+      coroutine->nmethods_do(&_code_cl);
+    }
+  }
 };
 
 class CMRemarkTask: public AbstractGangTask {
@@ -2726,6 +2732,7 @@ public:
 
         G1RemarkThreadsClosure threads_f(G1CollectedHeap::heap(), task, !_is_serial);
         Threads::threads_do(&threads_f);
+        Coroutine::coroutines_do(&threads_f);
       }
 
       do {

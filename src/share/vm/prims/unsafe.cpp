@@ -1365,7 +1365,7 @@ JVM_ENTRY(jlong, CoroutineSupport_getNativeThreadCoroutine(JNIEnv* env, jclass k
   DEBUG_CORO_PRINT("CoroutineSupport_getNativeThreadCoroutine\n");
   assert(EnableCoroutine, "pre-condition");
 
-  Coroutine* list = thread->coroutine_list();
+  Coroutine* list = thread->thread_coroutine();
   assert(list != NULL, "thread isn't initialized for coroutines");
 
   return (jlong)list;
@@ -1383,11 +1383,10 @@ JVM_ENTRY(void, CoroutineSupport_switchToAndTerminate(JNIEnv* env, jclass klass,
   oop old_oop = JNIHandles::resolve(old_coroutine);
   Coroutine* coro = (Coroutine*)java_dyn_CoroutineBase::data(old_oop);
   assert(coro != NULL, "NULL old coroutine in switchToAndTerminate");
-
   java_dyn_CoroutineBase::set_data(old_oop, 0);
 
   CoroutineStack::free_stack(coro->stack(), thread);
-  delete coro;
+  coro->clean_up();
 JVM_END
 
 JVM_ENTRY(void, CoroutineSupport_switchToAndExit(JNIEnv* env, jclass klass, jobject old_coroutine, jobject target_coroutine))
@@ -1414,7 +1413,7 @@ JVM_ENTRY(jlong, CoroutineSupport_createCoroutine(JNIEnv* env, jclass klass, job
   if (coro == NULL) {
     THROW_0(vmSymbols::java_lang_OutOfMemoryError());
   }
-  coro->insert_into_list(thread->coroutine_list());
+  coro->insert();
   return (jlong)coro;
 JVM_END
 
@@ -1429,7 +1428,7 @@ JVM_ENTRY(jboolean, CoroutineSupport_testDisposableAndTryReleaseStack(JNIEnv* en
   jboolean is_disposable = coro->is_disposable();
   if (is_disposable) {
     CoroutineStack::free_stack(coro->stack(), thread);
-    delete coro;
+    coro->clean_up();
   }
   return is_disposable;
 JVM_END
@@ -1449,18 +1448,18 @@ JVM_ENTRY(void, CoroutineSupport_setWispBooted(JNIEnv* env, jclass klass))
   WispThread::set_wisp_booted(thread);
 JVM_END
 
+JVM_ENTRY(void, CoroutineSupport_markAsCarrier(JNIEnv* env, jclass klass))
+  DEBUG_CORO_PRINT("CoroutineSupport_markAsCarrier\n");
+  assert(EnableCoroutine, "pre-condition");
+  //Coroutine::mark_as_carrier(thread);
+JVM_END
+
+
 JVM_ENTRY (jobject, CoroutineSupport_getNextCoroutine(JNIEnv* env, jclass klass, jlong coroPtr))
   assert(EnableCoroutine, "pre-condition");
   Coroutine* coro = (Coroutine*)coroPtr;
-  assert (coro->next()->coroutine() != NULL, "coroutine oop can't be null");
-  return JNIHandles::make_local(env, coro->next()->coroutine());
-JVM_END
-
-JVM_ENTRY (void, CoroutineSupport_moveCoroutine(JNIEnv* env, jclass klass, jlong coroPtr, jlong targetPtr))
-  assert(EnableCoroutine, "pre-condition");
-  Coroutine* coro = (Coroutine*)coroPtr;
-  Coroutine* target = (Coroutine*)targetPtr;
-  Coroutine::move(coro, target);
+  Coroutine* next = coro->next_coroutine(coro->thread());
+  return JNIHandles::make_local(env, next->coroutine());
 JVM_END
 
 JVM_ENTRY (void, CoroutineSupport_markThreadCoroutine(JNIEnv* env, jclass klass, jlong coroPtr, jobject coroObj))
@@ -1486,8 +1485,6 @@ JVM_ENTRY(jboolean, CoroutineSupport_stealCoroutine(JNIEnv* env, jclass klass, j
   }
   assert(coro->thread() != thread, "steal from self");
   assert(coro->state() != Coroutine::_current, "running");
-  coro->remove_from_list(coro->thread()->coroutine_list());
-  coro->insert_into_list(thread->coroutine_list());
   // change thread logic
   if (coro->last_handle_mark() != NULL) {
     coro->last_handle_mark()->change_thread_for_wisp(thread);
@@ -1873,9 +1870,9 @@ JNINativeMethod coroutine_support_methods[] = {
                                   CC"(J)Z",           FN_PTR(CoroutineSupport_testDisposableAndTryReleaseStack)},
     {CC"cleanupCoroutine",        CC"()"COBA,         FN_PTR(CoroutineSupport_cleanupCoroutine)},
     {CC"setWispBooted",           CC"()V",            FN_PTR(CoroutineSupport_setWispBooted)},
+    {CC"markAsCarrier",           CC"()V",            FN_PTR(CoroutineSupport_markAsCarrier)},
     {CC"stealCoroutine",          CC"(J)Z",           FN_PTR(CoroutineSupport_stealCoroutine)},
     {CC"getNextCoroutine",        CC"(J)"COR,         FN_PTR(CoroutineSupport_getNextCoroutine)},
-    {CC"moveCoroutine",           CC"(JJ)V",          FN_PTR(CoroutineSupport_moveCoroutine)},
     {CC"markThreadCoroutine",     CC"(J"COBA")V",     FN_PTR(CoroutineSupport_markThreadCoroutine)},
     {CC"shouldThrowException0", CC"(J)Z",           FN_PTR(CoroutineSupport_shouldThrowException0)},
     {CC"getCoroutineStack",       CC"(J)["STE,        FN_PTR(CoroutineSupport_getCoroutineStack)},
